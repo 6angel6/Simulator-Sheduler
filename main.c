@@ -4,19 +4,26 @@
 
 #define MAX_PROCESSES 100
 
+// Structure to log each execution step for the Gantt Chart
 typedef struct {
     int pid;
-    int at;             // Arrival Time (Время прибытия)
-    int bt;             // Burst Time (Время выполнения)
-    int priority;       // Приоритет (меньшее число = выше приоритет)
-    int ct;             // Completion Time (Время завершения)
-    int tat;            // Turnaround Time (Время оборота)
-    int wt;             // Waiting Time (Время ожидания)
-    int rt;             // Remaining Time (для Round Robin)
-    int start_time;
+    int start;
+    int end;
+} ExecutionBlock;
+
+typedef struct {
+    int pid;
+    int at;             // Arrival Time
+    int bt;             // Burst Time
+    int priority;       // Priority (lower number = higher priority)
+    int ct;             // Completion Time
+    int tat;            // Turnaround Time
+    int wt;             // Waiting Time
+    int rt;             // Remaining Time
 } Process;
 
 
+// Function to print the final metrics table
 void print_table(Process p[], int n) {
     int total_wt = 0, total_tat = 0;
 
@@ -25,6 +32,7 @@ void print_table(Process p[], int n) {
     printf("--------------------------------------------------------------------------------\n");
 
     for(int i = 0; i < n; i++) {
+
         total_wt += p[i].wt;
         total_tat += p[i].tat;
         printf("| P%d  |    %d     |    %d    |   %d   |     %d      |     %d      |    %d    |\n",
@@ -36,6 +44,50 @@ void print_table(Process p[], int n) {
     printf("--------------------------------------------------------------------------------\n\n");
 }
 
+// Function to print the execution order in a console-style Gantt Chart
+void print_gantt_chart(ExecutionBlock timeline[], int count) {
+    printf("\n--- Gantt Chart (Execution Order) ---\n");
+
+    for(int i = 0; i < count; i++) {
+        printf("+------");
+    }
+    printf("+\n");
+
+    for(int i = 0; i < count; i++) {
+        if (timeline[i].pid == 0) {
+            printf("| IDLE ");
+        } else {
+            printf("| P%d   ", timeline[i].pid);
+        }
+    }
+    printf("|\n");
+
+    for(int i = 0; i < count; i++) {
+        printf("+------");
+    }
+    printf("+\n");
+
+    printf("%d", timeline[0].start);
+    for(int i = 0; i < count; i++) {
+        int spaces = 6;
+        int end_len = 0;
+        int temp = timeline[i].end;
+        if (temp == 0) end_len = 1;
+        while(temp > 0) {
+            temp /= 10;
+            end_len++;
+        }
+
+        spaces = 6 - (end_len - 1);
+        for(int j=0; j<spaces; j++) printf(" ");
+
+        printf("%d", timeline[i].end);
+    }
+    printf("\n");
+}
+
+
+// Utility function to sort processes by Arrival Time (AT)
 void sort_by_arrival(Process p[], int n) {
     for(int i=0; i<n-1; i++) {
         for(int j=0; j<n-i-1; j++) {
@@ -54,18 +106,29 @@ void fcfs(Process p[], int n) {
     printf("\n--- FCFS Scheduling ---\n");
     sort_by_arrival(p, n);
 
+    ExecutionBlock timeline[MAX_PROCESSES + 1];
+    int timeline_count = 0;
     int current_time = 0;
+
     for(int i=0; i<n; i++) {
         if(current_time < p[i].at) {
+
+            timeline[timeline_count++] = (ExecutionBlock){0, current_time, p[i].at};
             current_time = p[i].at;
         }
-        p[i].start_time = current_time;
+
+
+        int start = current_time;
         p[i].ct = current_time + p[i].bt;
+        current_time = p[i].ct;
+
+        timeline[timeline_count++] = (ExecutionBlock){p[i].pid, start, p[i].ct};
+
         p[i].tat = p[i].ct - p[i].at;
         p[i].wt = p[i].tat - p[i].bt;
-
-        current_time = p[i].ct;
     }
+
+    print_gantt_chart(timeline, timeline_count);
     print_table(p, n);
 }
 
@@ -76,6 +139,9 @@ void sjf(Process p[], int n) {
     int is_completed[MAX_PROCESSES] = {0};
 
     for(int i=0; i<n; i++) p[i].rt = p[i].bt;
+
+    ExecutionBlock timeline[MAX_PROCESSES * 2];
+    int timeline_count = 0;
 
     while(completed != n) {
         int idx = -1;
@@ -88,7 +154,7 @@ void sjf(Process p[], int n) {
                     idx = i;
                 }
                 if(p[i].bt == min_bt) {
-                    if(p[i].at < p[idx].at) {
+                    if(idx == -1 || p[i].at < p[idx].at) {
                         idx = i;
                     }
                 }
@@ -96,18 +162,29 @@ void sjf(Process p[], int n) {
         }
 
         if(idx != -1) {
-            p[idx].start_time = current_time;
+            int start = current_time;
             p[idx].ct = current_time + p[idx].bt;
+            int end = p[idx].ct;
+
+            timeline[timeline_count++] = (ExecutionBlock){p[idx].pid, start, end};
+
             p[idx].tat = p[idx].ct - p[idx].at;
             p[idx].wt = p[idx].tat - p[idx].bt;
 
             is_completed[idx] = 1;
             completed++;
-            current_time = p[idx].ct;
+            current_time = end;
         } else {
+            // IDLE period
+            if (timeline_count > 0 && timeline[timeline_count-1].pid == 0) {
+                timeline[timeline_count-1].end++;
+            } else {
+                timeline[timeline_count++] = (ExecutionBlock){0, current_time, current_time + 1}; 
+            }
             current_time++;
         }
     }
+    print_gantt_chart(timeline, timeline_count);
     print_table(p, n);
 }
 
@@ -116,6 +193,9 @@ void priority_scheduling(Process p[], int n) {
     printf("\n--- Priority Scheduling (Non-Preemptive) ---\n");
     int completed = 0, current_time = 0;
     int is_completed[MAX_PROCESSES] = {0};
+
+    ExecutionBlock timeline[MAX_PROCESSES * 2];
+    int timeline_count = 0;
 
     while(completed != n) {
         int idx = -1;
@@ -128,23 +208,38 @@ void priority_scheduling(Process p[], int n) {
                     idx = i;
                 }
                 if(p[i].priority == highest_priority) {
-                    if(p[i].at < p[idx].at) idx = i;
+                    if(idx == -1 || p[i].at < p[idx].at) {
+                        idx = i;
+                    }
                 }
             }
         }
 
         if(idx != -1) {
+            int start = current_time;
             p[idx].ct = current_time + p[idx].bt;
+            int end = p[idx].ct;
+
+
+            timeline[timeline_count++] = (ExecutionBlock){p[idx].pid, start, end};
+
             p[idx].tat = p[idx].ct - p[idx].at;
             p[idx].wt = p[idx].tat - p[idx].bt;
 
             is_completed[idx] = 1;
             completed++;
-            current_time = p[idx].ct;
+            current_time = end;
         } else {
+
+            if (timeline_count > 0 && timeline[timeline_count-1].pid == 0) {
+                timeline[timeline_count-1].end++;
+            } else {
+                timeline[timeline_count++] = (ExecutionBlock){0, current_time, current_time + 1}; 
+            }
             current_time++;
         }
     }
+    print_gantt_chart(timeline, timeline_count);
     print_table(p, n);
 }
 
@@ -156,31 +251,47 @@ void round_robin(Process p[], int n, int quantum) {
     int remaining_burst[MAX_PROCESSES];
     for(int i=0; i<n; i++) remaining_burst[i] = p[i].bt;
 
+    ExecutionBlock timeline[MAX_PROCESSES * 100];
+    int timeline_count = 0;
+
     int current_time = 0;
     int done = 0;
 
 
     while(done < n) {
-        int has_process = 0;
+        int work_done_this_cycle = 0;
+
         for(int i=0; i<n; i++) {
             if(remaining_burst[i] > 0 && p[i].at <= current_time) {
-                has_process = 1;
+                work_done_this_cycle = 1;
 
-                if(remaining_burst[i] > quantum) {
-                    current_time += quantum;
-                    remaining_burst[i] -= quantum;
-                } else {
-                    current_time += remaining_burst[i];
+                int exec_time = (remaining_burst[i] > quantum) ? quantum : remaining_burst[i];
+
+                int start = current_time;
+                current_time += exec_time;
+                remaining_burst[i] -= exec_time;
+
+                timeline[timeline_count++] = (ExecutionBlock){p[i].pid, start, current_time};
+
+                if(remaining_burst[i] == 0) {
                     p[i].ct = current_time;
                     p[i].tat = p[i].ct - p[i].at;
                     p[i].wt = p[i].tat - p[i].bt;
-                    remaining_burst[i] = 0;
                     done++;
                 }
             }
         }
-        if(has_process == 0) current_time++;
+
+        if(work_done_this_cycle == 0) {
+            if (timeline_count > 0 && timeline[timeline_count-1].pid == 0) {
+                timeline[timeline_count-1].end++;
+            } else {
+                timeline[timeline_count++] = (ExecutionBlock){0, current_time, current_time + 1};
+            }
+            current_time++;
+        }
     }
+    print_gantt_chart(timeline, timeline_count);
     print_table(p, n);
 }
 
