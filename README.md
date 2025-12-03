@@ -29,11 +29,11 @@ The web interface provides a step-by-step, time-based animation showing the life
 
 1.  **Compile:** Open a terminal or command prompt in the project directory.
     ```bash
-    gcc scheduler.c -o scheduler
+    gcc main.c -o main
     ```
 2.  **Run:** Execute the compiled program.
     ```bash
-    ./scheduler
+    ./main
     ```
 3.  **Use:** The program will ask for the number of processes and their parameters (**AT, BT, Priority**). You will then be prompted to select an algorithm (1-4) to run and display the calculated metrics (WT/TAT) in the console.
 
