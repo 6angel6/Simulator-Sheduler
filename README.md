@@ -57,3 +57,7 @@ The simulator relies on the following process metrics, which must be provided by
 | **Priority** | Priority Level | The importance level of the process (Lower number = Higher Priority). |
 | **TAT** | **Turnaround Time** | The total time spent by a process in the system (Completion Time - Arrival Time). |
 | **WT** | **Waiting Time** | The total time a process spends waiting in the Ready Queue (TAT - Burst Time). |
+
+
+<img width="1598" height="678" alt="image" src="https://github.com/user-attachments/assets/746818b6-df85-4265-86f5-e8831b801815" />
+
