@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Scheduling Simulator</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --success: #2ecc71;
+            --warning: #f1c40f;
+            --danger: #e74c3c;
+            --light: #ecf0f1;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1, h2, h3 { text-align: center; color: var(--primary); margin-bottom: 20px; }
+
+        .controls { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-bottom: 20px; padding: 20px; background: var(--light); border-radius: 12px; }
+        .input-group { display: flex; flex-direction: column; min-width: 120px; }
+        label { font-size: 14px; font-weight: 600; color: #555; margin-bottom: 5px; }
+        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+        button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 14px; margin-top: auto; }
+        .btn-add { background: var(--accent); color: white; }
+        .btn-add:hover { background: #2980b9; }
+        .btn-run { background: var(--success); color: white; }
+        .btn-run:hover { background: #27ae60; }
+        .btn-reset { background: var(--danger); color: white; }
+        .btn-reset:hover { background: #c0392b; }
+
+        .table-container { max-height: 200px; overflow-y: auto; margin-bottom: 20px; border: 1px solid #eee; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
+        th { background: var(--primary); color: white; position: sticky; top: 0; }
+
+        #visualization-area {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+        }
+
+        .viz-box {
+            flex: 1;
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-top: 5px solid #ccc;
+        }
+
+        .viz-box h4 { margin: 0 0 15px 0; color: #555; font-size: 1.1em; }
+
+        /* Waiting Queue Styling */
+        .viz-box.waiting { border-color: var(--warning); }
+        /* CPU Styling */
+        .viz-box.cpu { border-color: var(--accent); }
+        /* Completed Styling */
+        .viz-box.completed { border-color: var(--success); }
+
+        /* Process Badges (Bubbles) */
+        .process-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--light);
+            color: var(--primary);
+            font-weight: bold;
+            margin: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .process-badge.active { transform: scale(1.1); border-color: var(--accent); background: white; }
+        .p-running { background: var(--accent) !important; color: white !important; width: 80px; height: 80px; font-size: 1.2em; animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(52, 152, 219, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0); }
+        }
+
+
+        #timer-display {
+            text-align: center;
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--primary);
+            margin: 10px 0;
+            background: #e8e8e8;
+            padding: 10px;
+            border-radius: 8px;
+            display: inline-block;
+            min-width: 100px;
+        }
+
+
+        .gantt-container { overflow-x: auto; padding-bottom: 20px; border: 1px solid #ddd; padding: 10px; border-radius: 8px; background: white; min-height: 80px; display: flex; align-items: center; }
+        .gantt-bar {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            border-right: 1px solid rgba(255,255,255,0.2);
+            transition: width 0.2s linear;
+        }
+
+        .p1 { background: #e74c3c; } .p2 { background: #f39c12; } .p3 { background: #2ecc71; }
+        .p4 { background: #9b59b6; } .p5 { background: #34495e; } .p6 { background: #16a085; }
+        .idle { background: #bdc3c7; color: #333; }
+
+        .hidden { display: none; }
+        .stats-table { margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>CPU Scheduling Simulator</h1>
+
+    <div class="controls">
+        <div class="input-group">
+            <label>Arrival Time</label>
+            <input type="number" id="at" value="0" min="0">
+        </div>
+        <div class="input-group">
+            <label>Burst Time</label>
+            <input type="number" id="bt" value="5" min="1">
+        </div>
+        <div class="input-group">
+            <label>Priority (1=High)</label>
+            <input type="number" id="priority" value="1" min="1">
+        </div>
+        <button class="btn-add" onclick="addProcess()">+ Add new process</button>
+    </div>
+
+    <div class="table-container">
+        <table id="inputTable">
+            <thead>
+            <tr>
+                <th>PID</th>
+                <th>Arrival Time</th>
+                <th>Burst Time</th>
+                <th>Priority</th>
+                <th>Action</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div class="controls">
+        <div class="input-group">
+            <label>Algorithm</label>
+            <select id="algorithm">
+                <option value="FCFS">First-Come-First-Served (FCFS)</option>
+                <option value="SJF">Shortest Job First (SJF)</option>
+                <option value="Priority">Priority Scheduling</option>
+                <option value="RR">Round Robin (RR)</option>
+            </select>
+        </div>
+        <div class="input-group" id="quantumGroup" style="display:none;">
+            <label>Time Quantum</label>
+            <input type="number" id="quantum" value="2" min="1">
+        </div>
+        <button class="btn-run" id="runBtn" onclick="startAnimation()">▶ Start Simulation</button>
+        <button class="btn-reset" onclick="reset()">Reset</button>
+    </div>
+
+    <div id="simulation-view" class="hidden">
+        <div style="text-align: center;">
+            <div id="timer-display">Time: 0</div>
+            <p style="color: #777;">Simulation in real time...</p>
+        </div>
+
+        <div id="visualization-area">
+            <div class="viz-box waiting">
+                <h4>Waiting Queue</h4>
+                <div id="viz-waiting-queue" style="display:flex; flex-wrap:wrap; justify-content:center;"></div>
+            </div>
+
+            <div class="viz-box cpu">
+                <h4>CPU (Running)</h4>
+                <div id="viz-cpu" style="display:flex; justify-content:center; align-items:center; flex-grow: 1;">
+                    <span style="color:#aaa;">IDLE</span>
+                </div>
+            </div>
+
+            <div class="viz-box completed">
+                <h4>Completed Processes</h4>
+                <div id="viz-completed" style="display:flex; flex-wrap:wrap; justify-content:center;"></div>
+            </div>
+        </div>
+
+        <h3>Gantt Chart (Live)</h3>
+        <div class="gantt-container" id="gantt-chart"></div>
+
+        <div id="final-results" class="hidden">
+            <h3>Final Results Table</h3>
+            <table class="stats-table">
+                <thead>
+                <tr>
+                    <th>PID</th>
+                    <th>Completion Time</th>
+                    <th>Turnaround Time (TAT)</th>
+                    <th>Waiting Time (WT)</th>
+                </tr>
+                </thead>
+                <tbody id="resultsBody"></tbody>
+            </table>
+            <div style="margin-top: 15px; font-weight: bold; text-align: right;">
+                <p>Average TAT: <span id="avgTat">0</span></p>
+                <p>Average WT: <span id="avgWt">0</span></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let processes = [];
+    let pidCounter = 1;
+    let simulationInterval = null;
+
+    document.getElementById('algorithm').addEventListener('change', function() {
+        const qGroup = document.getElementById('quantumGroup');
+        qGroup.style.display = (this.value === 'RR') ? 'flex' : 'none';
+    });
+
+    function addProcess() {
+        const at = parseInt(document.getElementById('at').value);
+        const bt = parseInt(document.getElementById('bt').value);
+        const pr = parseInt(document.getElementById('priority').value);
+
+        if(isNaN(at) || isNaN(bt)) return alert("Enter valid numbers");
+
+        const p = { id: pidCounter++, at: at, bt: bt, priority: pr, colorClass: `p${(pidCounter-1)%6 || 6}` };
+        processes.push(p);
+        renderInputTable();
+    }
+
+    function renderInputTable() {
+        const tbody = document.querySelector('#inputTable tbody');
+        tbody.innerHTML = '';
+        processes.forEach((p, index) => {
+            tbody.innerHTML += `<tr>
+                <td>P${p.id}</td>
+                <td>${p.at}</td>
+                <td>${p.bt}</td>
+                <td>${p.priority}</td>
+                <td><button onclick="removeProcess(${index})" style="background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:4px;">X</button></td>
+            </tr>`;
+        });
+    }
+
+    function removeProcess(index) {
+        processes.splice(index, 1);
+        renderInputTable();
+    }
+
+    function reset() {
+        // Stop animation if running
+        if(simulationInterval) clearInterval(simulationInterval);
+        processes = [];
+        pidCounter = 1;
+        renderInputTable();
+        document.getElementById('simulation-view').classList.add('hidden');
+        document.getElementById('runBtn').disabled = false;
+        document.getElementById('runBtn').style.opacity = "1";
+    }
+
+
+    function calculateSchedule() {
+        const alg = document.getElementById('algorithm').value;
+        const quantum = parseInt(document.getElementById('quantum').value);
+
+
+        let queue = JSON.parse(JSON.stringify(processes));
+        let timeline = [];
+        let completedProcesses = [];
+
+        if(alg === 'FCFS') {
+            queue.sort((a,b) => a.at - b.at);
+            let time = 0;
+            queue.forEach(p => {
+                if(time < p.at) {
+                    timeline.push({ pid: 'Idle', start: time, end: p.at });
+                    time = p.at;
+                }
+                timeline.push({ pid: p.id, start: time, end: time + p.bt });
+                time += p.bt;
+                p.ct = time;
+                p.tat = p.ct - p.at;
+                p.wt = p.tat - p.bt;
+                completedProcesses.push(p);
+            });
+        } else if (alg === 'SJF') {
+            let time = 0;
+            let completed = 0;
+            let n = queue.length;
+            let isCompleted = new Array(n).fill(false);
+
+            while(completed < n) {
+                let idx = -1;
+                let minBt = Infinity;
+                for(let i=0; i<n; i++) {
+                    if(queue[i].at <= time && !isCompleted[i]) {
+                        if(queue[i].bt < minBt) {
+                            minBt = queue[i].bt;
+                            idx = i;
+                        }
+                        if(queue[i].bt === minBt) {
+                            if(queue[i].at < queue[idx].at) idx = i;
+                        }
+                    }
+                }
+                if(idx !== -1) {
+                    let p = queue[idx];
+                    timeline.push({ pid: p.id, start: time, end: time + p.bt });
+                    time += p.bt;
+                    p.ct = time;
+                    p.tat = p.ct - p.at;
+                    p.wt = p.tat - p.bt;
+                    completedProcesses.push(p);
+                    isCompleted[idx] = true;
+                    completed++;
+                } else {
+                    timeline.push({ pid: 'Idle', start: time, end: time + 1 });
+                    time++;
+                }
+            }
+        } else if (alg === 'Priority') {
+            let time = 0;
+            let completed = 0;
+            let n = queue.length;
+            let isCompleted = new Array(n).fill(false);
+
+            while(completed < n) {
+                let idx = -1;
+                let highPri = Infinity;
+                for(let i=0; i<n; i++) {
+                    if(queue[i].at <= time && !isCompleted[i]) {
+                        if(queue[i].priority < highPri) {
+                            highPri = queue[i].priority;
+                            idx = i;
+                        }
+                        if(queue[i].priority === highPri) {
+                            if(queue[i].at < queue[idx].at) idx = i;
+                        }
+                    }
+                }
+                if(idx !== -1) {
+                    let p = queue[idx];
+                    timeline.push({ pid: p.id, start: time, end: time + p.bt });
+                    time += p.bt;
+                    p.ct = time;
+                    p.tat = p.ct - p.at;
+                    p.wt = p.tat - p.bt;
+                    completedProcesses.push(p);
+                    isCompleted[idx] = true;
+                    completed++;
+                } else {
+                    timeline.push({ pid: 'Idle', start: time, end: time + 1 });
+                    time++;
+                }
+            }
+        } else if (alg === 'RR') {
+            queue.sort((a,b) => a.at - b.at);
+            let time = 0;
+            let remaining = queue.map(p => ({...p, rt: p.bt}));
+            let completed = 0;
+
+            while(completed < queue.length) {
+                let workDone = false;
+                for(let i=0; i<queue.length; i++) {
+                    if(remaining[i].at <= time && remaining[i].rt > 0) {
+                        workDone = true;
+                        let exec = Math.min(quantum, remaining[i].rt);
+                        timeline.push({ pid: remaining[i].id, start: time, end: time + exec });
+                        time += exec;
+                        remaining[i].rt -= exec;
+
+                        if(remaining[i].rt === 0) {
+                            completed++;
+                            let original = queue.find(q => q.id === remaining[i].id);
+                            original.ct = time;
+                            original.tat = original.ct - original.at;
+                            original.wt = original.tat - original.bt;
+                            // Update this specific instance in completedProcesses only when finished
+                            if(!completedProcesses.find(cp => cp.id === original.id)) {
+                                completedProcesses.push(original);
+                            }
+                        }
+                    }
+                }
+                if(!workDone) {
+                    timeline.push({ pid: 'Idle', start: time, end: time + 1 });
+                    time++;
+                }
+            }
+        }
+
+        return { timeline, completedProcesses };
+    }
+
+    // --- ANIMATION CONTROLLER ---
+
+    function startAnimation() {
+        if(processes.length === 0) return alert("Add at least one process!");
+
+        // 1. Calculate the plan
+        const { timeline, completedProcesses } = calculateSchedule();
+        const totalTime = timeline[timeline.length-1].end;
+
+        // 2. Prepare UI
+        document.getElementById('simulation-view').classList.remove('hidden');
+        document.getElementById('final-results').classList.add('hidden');
+        document.getElementById('gantt-chart').innerHTML = '';
+        document.getElementById('runBtn').disabled = true;
+        document.getElementById('runBtn').style.opacity = "0.5";
+
+        // 3. Animation Loop Variables
+        let currentTime = 0;
+        const tickSpeed = 800; // ms per simulated second
+
+        // Clear any existing interval
+        if(simulationInterval) clearInterval(simulationInterval);
+
+        // 4. The Loop
+        simulationInterval = setInterval(() => {
+            // A. Update Timer
+            document.getElementById('timer-display').innerText = `Time: ${currentTime}`;
+
+            // B. Determine Current State from Timeline
+            let activeBlock = timeline.find(b => currentTime >= b.start && currentTime < b.end);
+
+            let currentPid = activeBlock ? activeBlock.pid : 'Idle';
+
+            updateVisualization(currentTime, currentPid, processes, completedProcesses);
+            updateGanttChart(activeBlock, currentTime);
+
+            // C. Check Finish Condition
+            if(currentTime >= totalTime) {
+                clearInterval(simulationInterval);
+                finishSimulation(completedProcesses);
+                return;
+            }
+
+            currentTime++;
+
+        }, tickSpeed);
+    }
+
+    function updateVisualization(time, currentPid, allProcs, finalStats) {
+        const queueEl = document.getElementById('viz-waiting-queue');
+        const cpuEl = document.getElementById('viz-cpu');
+        const compEl = document.getElementById('viz-completed');
+
+        queueEl.innerHTML = '';
+        compEl.innerHTML = '';
+        cpuEl.innerHTML = '';
+
+        // 1. Identify Running Process
+        let runningProc = null;
+        if(currentPid !== 'Idle') {
+            runningProc = allProcs.find(p => p.id === currentPid);
+            // Show inside CPU
+            cpuEl.innerHTML = `<div class="process-badge p-running p${(currentPid-1)%6 || 6}">P${currentPid}</div>`;
+        } else {
+            cpuEl.innerHTML = `<span style="color:#aaa; font-weight:bold;">IDLE</span>`;
+        }
+
+        // 2. Identify Completed and Waiting
+        allProcs.forEach(p => {
+            const stats = finalStats.find(fp => fp.id === p.id);
+            const finishTime = stats ? stats.ct : Infinity;
+
+            if (stats && time >= finishTime) {
+                // Completed
+                compEl.innerHTML += `<div class="process-badge p${(p.id-1)%6 || 6}">P${p.id}</div>`;
+            } else if (time >= p.at && p.id !== currentPid) {
+                // Waiting (Arrived, Not Finished, Not in CPU)
+                queueEl.innerHTML += `<div class="process-badge p${(p.id-1)%6 || 6}">P${p.id}</div>`;
+            }
+        });
+    }
+
+    function updateGanttChart(block, time) {
+        const gantt = document.getElementById('gantt-chart');
+
+        // Create a 1-unit block for the current second
+        const div = document.createElement('div');
+        div.style.flex = "0 0 30px"; // Fixed width per second
+        div.style.height = "100%";
+        div.style.borderRight = "1px solid rgba(255,255,255,0.1)";
+        div.style.display = "flex";
+        div.style.alignItems = "center";
+        div.style.justifyContent = "center";
+        div.style.fontSize = "10px";
+
+        if (block && block.pid !== 'Idle') {
+            const colorClass = `p${(block.pid-1)%6 || 6}`;
+            div.className = colorClass;
+            div.innerText = `P${block.pid}`;
+        } else {
+            div.style.background = "#bdc3c7";
+            div.innerText = "_";
+        }
+
+        gantt.appendChild(div);
+        // Auto scroll to right
+        gantt.scrollLeft = gantt.scrollWidth;
+    }
+
+    function finishSimulation(completedProcesses) {
+        document.getElementById('final-results').classList.remove('hidden');
+        document.getElementById('timer-display').innerText = "Simulation Finished";
+        document.getElementById('runBtn').disabled = false;
+        document.getElementById('runBtn').style.opacity = "1";
+
+        const tbody = document.getElementById('resultsBody');
+        tbody.innerHTML = '';
+        let totalTat = 0;
+        let totalWt = 0;
+
+        completedProcesses.sort((a,b) => a.id - b.id);
+
+        completedProcesses.forEach(p => {
+            totalTat += p.tat;
+            totalWt += p.wt;
+            tbody.innerHTML += `<tr>
+                <td>P${p.id}</td>
+                <td>${p.ct}</td>
+                <td>${p.tat}</td>
+                <td>${p.wt}</td>
+            </tr>`;
+        });
+
+        document.getElementById('avgTat').innerText = (totalTat / completedProcesses.length).toFixed(2);
+        document.getElementById('avgWt').innerText = (totalWt / completedProcesses.length).toFixed(2);
+    }
+
+</script>
+
+</body>
+</html>
